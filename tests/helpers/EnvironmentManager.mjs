@@ -1,40 +1,10 @@
-import fs from 'fs'
+import fs from "fs"
 
 
 class EnvironmentManager {
-    static getConfig() {
-        const environmentConfig = {
-            'env': {
-                'development': './../../.env',
-                'production': './../.env'
-            },
-            'schemas': {
-                'development': './../../../schemas/v1.2.0/',
-                'production': './../../../schemas/v1.2.0/'
-            }
-        }
-
-        return { environmentConfig }
-    }
-
-
-    static getStageType( { argvs } ) {
-        const finding = argvs
-            .find( arg => arg.startsWith( '--stage=' ) )
-        if( !finding ) {
-            console.warn( 'No stage type provided, defaulting to "development"' )
-            return { stageType: 'development' }
-        }
-        const stageType = finding.split( '=' )[ 1 ].trim()
-        console.log( `Stage type: ${stageType}` )
-
-        return { stageType }
-    }
-
-/*
-    static getEnvObject( { stageType, environmentConfig } ) {
-        const envObject = this
-            .#loadEnv( { stageType, environmentConfig } )
+    static getCredentials( { envPath, envSelection } ) {
+        const rawEnv = this
+            .#loadEnv( { envPath} )
             .split( "\n" )
             .filter( line => line && !line.startsWith( '#' ) && line.includes( '=' ) )
             .map( line => line.split( '=' ) )
@@ -43,29 +13,95 @@ class EnvironmentManager {
                 return acc
             }, {} )
 
-        return { envObject }
-    }
-*/
+        const messages = []
+        const selection = envSelection
+            .reduce( ( acc, select ) => {
+                const [ varName, envKey ] = select
+                if( Array.isArray( envKey ) ) {
+                    acc[ varName ] = envKey
+                        .map( key => {
+                            const item = rawEnv[ key ]
+                            if ( item === undefined ) {
+                                messages.push( `Missing environment variable: ${key}` )
+                            }
+                            return item
+                        } )
+                } else {
+                    acc[ varName ] = rawEnv[ envKey ]
+                }
+                return acc
+            }, {} )
 
-    static getPackageVersion() {
-        const { version: managerVersion } = JSON.parse( fs.readFileSync( './package.json', 'utf-8' ) )
-        console.log( `Manager version: ${managerVersion}` )
-        return { managerVersion }
+        if( messages.length > 0 ) {
+            throw new Error( `Environment loading failed: ${ messages.join( ', ' ) }` )
+        }
+
+        const { x402Credentials, privateKey } = Object
+            .entries( selection )
+            .reduce( ( acc, [ key, value ] ) => {
+                if( key.toLowerCase().includes( 'privatekey' ) ) {
+                    if( acc['privateKey'] !== null ) { console.warn( `Multiple private keys found, using the first one` ); return acc }
+                    acc['privateKey'] = value
+                } else {
+                    acc['x402Credentials'][ key ] = value
+                }
+                return acc
+            }, { 'x402Credentials': {}, 'privateKey': null } )
+
+        return { x402Credentials, privateKey }
     }
 
 /*
-    static #loadEnv( { stageType, environmentConfig } ) {
-        const path = environmentConfig['env'][ stageType ]
-        if( !path ) {
+    static getCredentials( { envObject, envSelection } ) {
+        const messages = []
+        const selection = envSelection
+            .reduce( ( acc, select ) => {
+                const [ varName, envKey ] = select
+                if( Array.isArray( envKey ) ) {
+                    acc[ varName ] = envKey
+                        .map( key => {
+                            const item = envObject[ key ]
+                            if ( item === undefined ) {
+                                messages.push( `Missing environment variable: ${key}` )
+                            }
+                            return item
+                        } )
+                } else {
+                    acc[ varName ] = envObject[ envKey ]
+                }
+                return acc
+            }, {} )
+
+        const { x402Credentials, privateKey } = Object
+            .entries( selection )
+            .reduce( ( acc, [ key, value ] ) => {
+                if( key.toLowerCase().includes( 'privatekey' ) ) {
+                    if( acc['privateKey'] !== null ) { console.warn( `Multiple private keys found, using the first one` ); return acc }
+                    acc['privateKey'] = value
+                } else {
+                    acc['x402Credentials'][ key ] = value
+                }
+                return acc
+            }, { 'x402Credentials': {}, 'privateKey': null } )
+
+        if ( messages.length > 0 ) {
+            throw new Error( `X402Config.getCredentials: ${messages.join( ", \n" )}` )
+        }
+
+        return { x402Credentials, privateKey }
+    }
+*/
+
+    static #loadEnv( { envPath } ) {
+        if( !envPath ) {
             console.error( `No environment file found for stage type: ${stageType}` )
             return false
         }
 
         const envFile = fs
-            .readFileSync( path, 'utf-8' )
+            .readFileSync( envPath, 'utf-8' )
         return envFile
     }
-*/
 }
 
 

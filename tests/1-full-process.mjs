@@ -1,6 +1,5 @@
-import {  ClientExact,  ServerExact,  NonceStore  } from './../src/index.mjs'
+import {  ClientExact,  ServerExact,  NonceStore  } from '../src/index.mjs'
 import { EnvironmentManager } from './helpers/EnvironmentManager.mjs'
-import { X402ConfigManager } from './helpers/X402ConfigManager.mjs'
 
 
 const cfg = {
@@ -15,7 +14,6 @@ const cfg = {
             'paymentOptions': [
                 { 
                     'contractId': 'usdc-sepolia',
-                    'paymnentType': 'onchain', // external or onchain
                     'maxAmountRequired': '0.01',
                     'payTo': '{{payTo1}}',
                 }
@@ -49,16 +47,13 @@ const cfg = {
     }
 }
 const chainId = '84532'
+const envPath = './../../.env'
 
 // 1️⃣ Prepare Environment
-const { stageType } = EnvironmentManager
-    .getStageType( { argvs: process.argv } )
-const { environmentConfig } = EnvironmentManager
-    .getConfig()
-const { x402Credentials: clientCredentials, privateKey: clientPrivateKey } = X402ConfigManager
-    .getCredentials( { stageType, environmentConfig, envSelection: cfg['client'][ chainId ]['envSelection'] } )
-const { x402Credentials: serverCredentials, privateKey: serverPrivateKey } = X402ConfigManager
-    .getCredentials( { stageType, environmentConfig, envSelection: cfg['server'][ chainId ]['envSelection'] } )
+const { x402Credentials: clientCredentials, privateKey: clientPrivateKey } = EnvironmentManager
+    .getCredentials( { envPath, envSelection: cfg['client'][ chainId ]['envSelection'] } )
+const { x402Credentials: serverCredentials, privateKey: serverPrivateKey } = EnvironmentManager
+    .getCredentials( { envPath, envSelection: cfg['server'][ chainId ]['envSelection'] } )
 
 // 2️⃣ Server static paymentRequirementsPayload
 let { chainName, contracts } = cfg['server'][ chainId ]
