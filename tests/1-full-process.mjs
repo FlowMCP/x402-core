@@ -11,13 +11,13 @@ const cfg = {
                 [ 'payTo1',                    'ACCOUNT_DEVELOPMENT2_PUBLIC_KEY'  ],
                 [ 'serverProviderUrl',         'BASE_SEPOLIA_ALCHEMY_HTTP'        ]
             ],
-            'paymentOptions': [
-                { 
+            'paymentOptions': {
+                'usdc-sepolia': { 
                     'contractId': 'usdc-sepolia',
                     'maxAmountRequired': '0.01',
                     'payTo': '{{payTo1}}',
                 }
-            ],
+            },
             'contracts': {
                 'usdc-sepolia': {
                     'domainName': 'USDC',

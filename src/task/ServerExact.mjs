@@ -1,14 +1,14 @@
-import { parse } from 'json2csv';
+import { parse } from 'json2csv'
 import { createPublicClient, createWalletClient, http, parseUnits, parseAbi, encodeFunctionData, getContract, formatUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 
 function logTable(title, rows) {
-    console.log(`\n===== ${title} =====`);
+    console.log(`\n===== ${title} =====`)
     for (const [key, value] of Object.entries(rows)) {
-        console.log(`${key.padEnd(20)}: ${value}`);
+        console.log(`${key.padEnd(20)}: ${value}`)
     }
-    console.log('===========================\n');
+    console.log('===========================\n')
 }
 
 
@@ -21,16 +21,19 @@ class ServerExact {
     #facilitatorSigner
     #silent
 
+
     constructor( { nonceStore, silent = false } ) {
         this.#nonceStore = nonceStore
         this.#silent = silent
     }
+
 
     #log( message ) {
         if( !this.#silent ) {
             console.log( message )
         }
     }
+
 
     init( { providerUrl } ) {
         this.#providerUrl = providerUrl
@@ -48,10 +51,12 @@ class ServerExact {
         return this
     }
 
+
     static getPaymentRequirementsPayload( { chainId, chainName, paymentOptions, contracts, resource='' } ) {
-        const accepts = paymentOptions
-            .map( ( paymentOption ) => {
-                const { contractId, maxAmountRequired, payTo } = paymentOption
+        const accepts = Object
+            .entries( paymentOptions )
+            .map( ( [ contractId, paymentOption ] ) => {
+                const { maxAmountRequired, payTo } = paymentOption
                 const contract = contracts[ contractId ]
                 const { address: verifyingContract, decimals, domainName: name } = contract
 
@@ -80,21 +85,23 @@ class ServerExact {
 
     static getPaymentOptions( { cfg, serverCredentials } ) {
         let { paymentOptions } = cfg
-        paymentOptions = paymentOptions
-            .map( ( option ) => {
+
+        paymentOptions = Object
+            .entries( paymentOptions )
+            .reduce( ( acc, [ contractId, option ] ) => {
                 const { payTo } = option
                 const searchKey = payTo.replaceAll( '{{', '' ).replaceAll( '}}', '' )
                 const payToValue = serverCredentials[ searchKey ]
                 if( !payToValue ) {
                     throw new Error( `PayTo value for ${searchKey} not found in serverCredentials` )
                 }
-                option['payTo'] = payToValue
-
-                return option
-            } )
+                acc[ contractId ] = { ...option, payTo: payToValue }
+                return acc
+            }, {} )
 
         return { paymentOptions }
     }
+
 
     async setWallet( { privateKey, minEth = '0.01' } ) {
         const cleanHex = privateKey.startsWith( '0x' ) ? privateKey : `0x${ privateKey }`
@@ -104,7 +111,7 @@ class ServerExact {
         this.#walletClient = createWalletClient({
             account: this.#facilitatorSigner,
             transport: http(this.#providerUrl)
-        });
+        })
 
         const balanceRaw = await this.#provider.getBalance( { address: accountAddress } )
         const balance = Number( formatUnits( balanceRaw, 18 ) )
@@ -113,7 +120,7 @@ class ServerExact {
             logTable('Facilitator Wallet', {
                 'Address': accountAddress,
                 'ETH Balance': `${balance} ETH`
-            });
+            })
         }
 
         if( balance < parseFloat( minEth ) ) {
@@ -122,6 +129,7 @@ class ServerExact {
 
         return this
     }
+
 
     decodePaymentHeader( { headerString } ) {
         const decodedPayment = JSON.parse( headerString )
@@ -135,8 +143,8 @@ class ServerExact {
         return { decodedPayment }
     }
 
+
     findMatchingPaymentRequirements( { paymentRequirementsPayload, decodedPayment } ) {
-        
         const selectedRequirement = paymentRequirementsPayload['accepts']
             .find( ( pr ) =>
                 pr.scheme === decodedPayment.scheme &&
@@ -152,6 +160,7 @@ class ServerExact {
 
         return { selectedRequirement }
     }
+
 
     async validatePayment( { decodedPayment, paymentRequirement } ) {
         const message = decodedPayment.payload.authorization
@@ -170,6 +179,7 @@ class ServerExact {
         this.#log( '✅ Payment validated successfully' )
         return { ok: true }
     }
+
 
     async simulateTransaction( { decodedPayment, tokenAddress } ) {
         const { authorization: auth, signature } = decodedPayment.payload
@@ -192,6 +202,7 @@ class ServerExact {
         }
     }
 
+
     async settleTransaction( { decodedPayment, tokenAddress } ) {
         const { authorization: auth, signature } = decodedPayment.payload
         const { from, to, value, validAfter, validBefore, nonce } = auth
@@ -206,11 +217,12 @@ class ServerExact {
         const hash = await this.#walletClient.sendTransaction({
             to: tokenAddress,
             data
-        });
+        })
 
         this.#log( `✅ Settlement broadcasted: ${ hash }` )
         return { ok: true, txHash: hash }
     }
+
 
     #splitVRS( signatureHex ) {
         const sig = signatureHex.startsWith( '0x' ) ? signatureHex.slice( 2 ) : signatureHex
