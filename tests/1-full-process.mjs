@@ -11,6 +11,9 @@ const cfg = {
                 [ 'payTo1',                    'ACCOUNT_DEVELOPMENT2_PUBLIC_KEY'  ],
                 [ 'serverProviderUrl',         'BASE_SEPOLIA_ALCHEMY_HTTP'        ]
             ],
+            'activePaymentOptions': [
+                'usdc-sepolia'
+            ],
             'paymentOptions': {
                 'usdc-sepolia': { 
                     'contractId': 'usdc-sepolia',
@@ -56,11 +59,11 @@ const { x402Credentials: serverCredentials, privateKey: serverPrivateKey } = Env
     .getCredentials( { envPath, envSelection: cfg['server'][ chainId ]['envSelection'] } )
 
 // 2️⃣ Server static paymentRequirementsPayload
-let { chainName, contracts } = cfg['server'][ chainId ]
-const { paymentOptions } = ServerExact
-    .getPaymentOptions( { cfg: cfg['server'][ chainId ], serverCredentials } )
+const { chainName, contracts, paymentOptions, activePaymentOptions } = cfg['server'][ chainId ]
+const { activePaymentOptions: activatedOptions } = ServerExact
+    .getActivePaymentOptions( { paymentOptions, activePaymentOptions, serverCredentials } )
 const { paymentRequirementsPayload } = ServerExact
-    .getPaymentRequirementsPayload( { payTo: '', chainId, chainName, paymentOptions, contracts, resource:'' } )
+    .getPaymentRequirementsPayload( { chainId, chainName, activePaymentOptions: activatedOptions, contracts, resource: '' } )
 
 
 // 3️⃣ Client initialize

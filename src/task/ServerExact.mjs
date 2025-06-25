@@ -1,3 +1,4 @@
+import { parse } from 'json2csv'
 import { createPublicClient, createWalletClient, http, parseUnits, parseAbi, encodeFunctionData, getContract, formatUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
@@ -51,9 +52,8 @@ class ServerExact {
     }
 
 
-    static getPaymentRequirementsPayload( { chainId, chainName, paymentOptions, contracts, resource='' } ) {
-        const accepts = Object
-            .entries( paymentOptions )
+    static getPaymentRequirementsPayload( { chainId, chainName, activePaymentOptions, contracts, resource='' } ) {
+        const accepts = Object.entries( activePaymentOptions )
             .map( ( [ contractId, paymentOption ] ) => {
                 const { maxAmountRequired, payTo } = paymentOption
                 const contract = contracts[ contractId ]
@@ -82,23 +82,26 @@ class ServerExact {
     }
 
 
-    static getPaymentOptions( { cfg, serverCredentials } ) {
-        let { paymentOptions } = cfg
+    static getActivePaymentOptions( { paymentOptions, activePaymentOptions, serverCredentials } ) {
+        const filteredPaymentOptions = activePaymentOptions
+            .reduce( ( acc, contractId ) => {
+                const option = paymentOptions[ contractId ]
+                if( !option ) {
+                    throw new Error( `ContractId ${ contractId } not found in paymentOptions` )
+                }
 
-        paymentOptions = Object
-            .entries( paymentOptions )
-            .reduce( ( acc, [ contractId, option ] ) => {
                 const { payTo } = option
                 const searchKey = payTo.replaceAll( '{{', '' ).replaceAll( '}}', '' )
                 const payToValue = serverCredentials[ searchKey ]
                 if( !payToValue ) {
                     throw new Error( `PayTo value for ${searchKey} not found in serverCredentials` )
                 }
+
                 acc[ contractId ] = { ...option, payTo: payToValue }
                 return acc
             }, {} )
 
-        return { paymentOptions }
+        return { activePaymentOptions: filteredPaymentOptions }
     }
 
 
