@@ -60,11 +60,10 @@ const { x402Credentials: serverCredentials, privateKey: serverPrivateKey } = Env
 
 // 2️⃣ Server static paymentRequirementsPayload
 const { chainName, contracts, paymentOptions, activePaymentOptions } = cfg['server'][ chainId ]
-const { activePaymentOptions: activatedOptions } = ServerExact
-    .getActivePaymentOptions( { paymentOptions, activePaymentOptions, serverCredentials } )
+const { preparedPaymentOptions } = ServerExact
+    .getPreparedPaymentOptions( { paymentOptions, activePaymentOptions, serverCredentials } )
 const { paymentRequirementsPayload } = ServerExact
-    .getPaymentRequirementsPayload( { chainId, chainName, activePaymentOptions: activatedOptions, contracts, resource: '' } )
-
+    .getPaymentRequirementsPayload( { chainId, chainName, preparedPaymentOptions, contracts, resource: '' } )
 
 // 3️⃣ Client initialize
 const { allowedPaymentOptions } = cfg['client'][ chainId ]

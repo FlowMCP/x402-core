@@ -1,7 +1,6 @@
 import { createPublicClient, createWalletClient, http, parseUnits, parseAbi, encodeFunctionData, getContract, formatUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
-
 function logTable(title, rows) {
     console.log(`\n===== ${title} =====`)
     for (const [key, value] of Object.entries(rows)) {
@@ -9,7 +8,6 @@ function logTable(title, rows) {
     }
     console.log('===========================\n')
 }
-
 
 class ServerExact {
     #nonceStore
@@ -51,16 +49,37 @@ class ServerExact {
     }
 
 
-    static getPaymentRequirementsPayload( { chainId, chainName, activePaymentOptions, contracts, resource='' } ) {
-        const accepts = Object.entries( activePaymentOptions )
+    static getPreparedPaymentOptions( { paymentOptions, activePaymentOptions, serverCredentials } ) {
+        const prepared = activePaymentOptions.reduce( ( acc, contractId ) => {
+            const option = paymentOptions[ contractId ]
+            if( !option ) {
+                throw new Error( `ContractId ${ contractId } not found in paymentOptions` )
+            }
+
+            const { payTo } = option
+            const searchKey = payTo.replaceAll( '{{', '' ).replaceAll( '}}', '' )
+            const payToValue = serverCredentials[ searchKey ]
+            if( !payToValue ) {
+                throw new Error( `PayTo value for ${searchKey} not found in serverCredentials` )
+            }
+
+            acc[ contractId ] = { ...option, payTo: payToValue }
+            return acc
+        }, {} )
+
+        return { preparedPaymentOptions: prepared }
+    }
+
+
+    static getPaymentRequirementsPayload( { chainId, chainName, preparedPaymentOptions, contracts, resource='' } ) {
+        const accepts = Object.entries( preparedPaymentOptions )
             .map( ( [ contractId, paymentOption ] ) => {
                 const { maxAmountRequired, payTo } = paymentOption
                 const contract = contracts[ contractId ]
                 const { address: verifyingContract, decimals, domainName: name } = contract
 
-                const scheme = 'exact'
                 return {
-                    scheme,
+                    scheme: 'exact',
                     network: chainName,
                     payTo,
                     maxAmountRequired,
@@ -81,47 +100,24 @@ class ServerExact {
     }
 
 
-    static getActivePaymentOptions( { paymentOptions, activePaymentOptions, serverCredentials } ) {
-        const filteredPaymentOptions = activePaymentOptions
-            .reduce( ( acc, contractId ) => {
-                const option = paymentOptions[ contractId ]
-                if( !option ) {
-                    throw new Error( `ContractId ${ contractId } not found in paymentOptions` )
-                }
-
-                const { payTo } = option
-                const searchKey = payTo.replaceAll( '{{', '' ).replaceAll( '}}', '' )
-                const payToValue = serverCredentials[ searchKey ]
-                if( !payToValue ) {
-                    throw new Error( `PayTo value for ${searchKey} not found in serverCredentials` )
-                }
-
-                acc[ contractId ] = { ...option, payTo: payToValue }
-                return acc
-            }, {} )
-
-        return { activePaymentOptions: filteredPaymentOptions }
-    }
-
-
     async setWallet( { privateKey, minEth = '0.01' } ) {
         const cleanHex = privateKey.startsWith( '0x' ) ? privateKey : `0x${ privateKey }`
         this.#facilitatorSigner = privateKeyToAccount( cleanHex )
         const accountAddress = this.#facilitatorSigner.address
 
-        this.#walletClient = createWalletClient({
+        this.#walletClient = createWalletClient( {
             account: this.#facilitatorSigner,
-            transport: http(this.#providerUrl)
-        })
+            transport: http( this.#providerUrl )
+        } )
 
         const balanceRaw = await this.#provider.getBalance( { address: accountAddress } )
         const balance = Number( formatUnits( balanceRaw, 18 ) )
 
-        if (!this.#silent) {
-            logTable('Facilitator Wallet', {
+        if( !this.#silent ) {
+            logTable( 'Facilitator Wallet', {
                 'Address': accountAddress,
-                'ETH Balance': `${balance} ETH`
-            })
+                'ETH Balance': `${ balance } ETH`
+            } )
         }
 
         if( balance < parseFloat( minEth ) ) {
@@ -146,7 +142,7 @@ class ServerExact {
 
 
     findMatchingPaymentRequirements( { paymentRequirementsPayload, decodedPayment } ) {
-        const selectedRequirement = paymentRequirementsPayload['accepts']
+        const selectedRequirement = paymentRequirementsPayload[ 'accepts' ]
             .find( ( pr ) =>
                 pr.scheme === decodedPayment.scheme &&
                 pr.network === decodedPayment.network &&
@@ -215,10 +211,10 @@ class ServerExact {
             args: [ from, to, value, validAfter, validBefore, nonce, v, r, s ]
         } )
 
-        const hash = await this.#walletClient.sendTransaction({
+        const hash = await this.#walletClient.sendTransaction( {
             to: tokenAddress,
             data
-        })
+        } )
 
         this.#log( `✅ Settlement broadcasted: ${ hash }` )
         return { ok: true, txHash: hash }
