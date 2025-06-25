@@ -1,4 +1,3 @@
-import { parse } from 'json2csv'
 import { createPublicClient, createWalletClient, http, parseUnits, parseAbi, encodeFunctionData, getContract, formatUnits } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
