@@ -1,6 +1,3 @@
-Sehr gern! Hier ist die **vollständige `README.md`** als kopierbarer Markdown-Block:
-
-````markdown
 [![Test](https://img.shields.io/github/actions/workflow/status/FlowMCP/x402-core/test-on-release.yml)](https://github.com/FlowMCP/x402-core/actions) ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
 # x402-core
@@ -173,26 +170,32 @@ const settlementResult = await server
 
 ## Table of Contents
 
-- [Features](#features)
-- [Table of Contents](#table-of-contents)
-- [METHODS – ClientExact](#methods--clientexact)
-  - [.selectMatchingPaymentOption()](#selectmatchingpaymentoption)
-  - [.init()](#init)
-  - [.setWallet()](#setwallet)
-  - [.createAuthorization()](#createauthorization)
-  - [.createXPaymentHeader()](#createxpaymentheader)
-- [METHODS – ServerExact](#methods--serverexact)
-  - [.getPreparedPaymentOptions()](#getpreparedpaymentoptions)
-  - [.getPaymentRequirementsPayload()](#getpaymentrequirementspayload)
-  - [.init()](#init-1)
-  - [.setWallet()](#setwallet-1)
-  - [.decodePaymentHeader()](#decodepaymentheader)
-  - [.findMatchingPaymentRequirements()](#findmatchingpaymentrequirements)
-  - [.validatePayment()](#validatepayment)
-  - [.simulateTransaction()](#simulatetransaction)
-  - [.settleTransaction()](#settletransaction)
-- [Contribution](#contribution)
-- [License](#license)
+- [x402-core](#x402-core)
+  - [Quickstart](#quickstart)
+    - [Imports and Setup](#imports-and-setup)
+    - [1. Setup Payment Requirements (Server)](#1-setup-payment-requirements-server)
+    - [2. Create Authorization (Client)](#2-create-authorization-client)
+    - [3. Validate and Settle (Server)](#3-validate-and-settle-server)
+  - [Features](#features)
+  - [Table of Contents](#table-of-contents)
+  - [METHODS – ClientExact](#methods--clientexact)
+    - [.selectMatchingPaymentOption()](#selectmatchingpaymentoption)
+    - [.init()](#init)
+    - [.setWallet()](#setwallet)
+    - [.createAuthorization()](#createauthorization)
+    - [.createXPaymentHeader()](#createxpaymentheader)
+  - [METHODS – ServerExact](#methods--serverexact)
+    - [.getPreparedPaymentOptions()](#getpreparedpaymentoptions)
+    - [.getPaymentRequirementsPayload()](#getpaymentrequirementspayload)
+    - [.init()](#init-1)
+    - [.setWallet()](#setwallet-1)
+    - [.decodePaymentHeader()](#decodepaymentheader)
+    - [.findMatchingPaymentRequirements()](#findmatchingpaymentrequirements)
+    - [.validatePayment()](#validatepayment)
+    - [.simulateTransaction()](#simulatetransaction)
+    - [.settleTransaction()](#settletransaction)
+  - [Contribution](#contribution)
+  - [License](#license)
 
 
 
@@ -644,10 +647,3 @@ Please make sure your code follows the formatting rules in `Formatierungsregeln.
 
 This project is licensed under the MIT License.
 See the [LICENSE](./LICENSE) file for details.
-
-```
-
----
-
-✅ Du kannst das jetzt direkt übernehmen, committen oder bei Bedarf noch anpassen. Wenn du möchtest, helfe ich dir auch gern noch bei einer passenden `package.json`, einem `LICENSE`-File oder der Testkonfiguration. Sag einfach Bescheid!
-```
