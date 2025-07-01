@@ -33,7 +33,7 @@ const cfg = {
 
 ### 1. Setup Payment Requirements (Server)
 
-> Verwendet:
+> Use:
 >
 > * `cfg.server[chainId]` → server configuration
 > * `serverCredentials` → resolved from .env using `EnvironmentManager`
@@ -63,7 +63,7 @@ const { paymentRequirementsPayload } = ServerExact
 
 ### 2. Create Authorization (Client)
 
-> Verwendet:
+> Use:
 >
 > * `cfg.client[chainId]` → client configuration
 > * `clientCredentials` → resolved from .env using `EnvironmentManager`
@@ -109,11 +109,11 @@ const { headerString } = client
 
 ### 3. Validate and Settle (Server)
 
-> Verwendet:
+> Use:
 >
-> * `serverPrivateKey` → aus Schritt 1
-> * `paymentRequirementsPayload` → aus Schritt 1
-> * `headerString` → vom Client erhalten
+> * `serverPrivateKey` → from Step 1
+> * `paymentRequirementsPayload` → from Step 1
+> * `headerString` → received from client
 
 ```js
 const nonceStore = new NonceStore()
@@ -641,7 +641,6 @@ returns { ok, txHash }
 Contributions are welcome!
 If you encounter bugs, have feature suggestions, or want to improve the module, feel free to open an issue or submit a pull request.
 
-Please make sure your code follows the formatting rules in `Formatierungsregeln.md` and includes meaningful tests.
 
 ## License
 
