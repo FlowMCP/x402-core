@@ -57,7 +57,8 @@ const { x402Credentials: clientCredentials, privateKey: clientPrivateKey } = Env
     .getCredentials( { envPath, envSelection: cfg['client'][ chainId ]['envSelection'] } )
 const { x402Credentials: serverCredentials, privateKey: serverPrivateKey } = EnvironmentManager
     .getCredentials( { envPath, envSelection: cfg['server'][ chainId ]['envSelection'] } )
-
+console.log( 'Server credentials:', serverCredentials )
+console.log( 'client credentials:', clientCredentials )
 // 2️⃣ Server static paymentRequirementsPayload
 const { chainName, contracts, paymentOptions, activePaymentOptions } = cfg['server'][ chainId ]
 const { preparedPaymentOptions } = ServerExact
@@ -81,7 +82,8 @@ await client
 
 const { authorization, signature } = await client
     .createAuthorization( { paymentOption, allowedPaymentOptions, chainId } )
-const { headerString } = client.createXPaymentHeader({ scheme, network, authorization, signature })
+const { headerString } = client
+    .createXPaymentHeader( { scheme, network, authorization, signature } )
 
 // 4️⃣ Server decode payment header
 const { serverProviderUrl } = serverCredentials
