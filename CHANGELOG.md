@@ -9,12 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **v2 exact/evm implementation**: Complete implementation of X402 v2 spec for EVM networks
+- **v2 Types**: `PaymentRequired`, `PaymentPayload`, `SettlementResponse` with validators
+- **v2 HTTP Transport**: Base64 JSON headers (`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`)
+- **Config Model**: `contractCatalog` + `paymentOptionCatalog` for cleaner configuration
+- **Multi-network Selection**: Deterministic policy-based payment option selection
+- **Validation Issue List**: Structured validation errors with paths and spec error codes
+- **Error Codes**: Spec-compliant error codes (`invalid_payload`, `invalid_network`, etc.)
+- **Network ID Format**: CAIP-2 format (`eip155:<chainId>`)
+- **v2 E2E Tests**: Success and failure case tests at `tests/v2/1-full-process.mjs`
+- **v2 Documentation**: Comprehensive API documentation at `docs/v2/README.md`
 - **Versioned exports**: Root now exports `v1`, `v2`, and `legacy` namespaces
-- **v2 scaffold**: Placeholder implementation for v2 (Types / Logic / Representation separation)
 - **Legacy entry point**: `x402-core/legacy` provides stable access to v1 functionality
 - **Documentation structure**: Separate docs for v1 and v2
 - **Migration guide**: `MIGRATION.md` with import path migration instructions
-- **v2 test template**: `tests/v2/1-full-process.mjs` (gated until v2 is implemented)
 
 ### Changed
 

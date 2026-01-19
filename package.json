@@ -7,7 +7,9 @@
     "test": "tests"
   },
   "scripts": {
-},
+    "test:v1": "node tests/v1/1-full-process.mjs",
+    "test:v2": "node tests/v2/1-full-process.mjs"
+  },
   "keywords": [],
   "author": "a6b8",
   "license": "MIT",
