@@ -3,6 +3,15 @@
   "version": "0.4.0",
   "description": "",
   "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./legacy": "./src/legacy/index.mjs",
+    "./v1": "./src/v1/index.mjs",
+    "./v2": "./src/v2/index.mjs",
+    "./v2/exact/evm": "./src/v2/exact/evm/index.mjs",
+    "./v2/config": "./src/v2/config/index.mjs",
+    "./v2/transports/http": "./src/v2/transports/http/index.mjs"
+  },
   "directories": {
     "test": "tests"
   },

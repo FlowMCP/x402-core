@@ -1,7 +1,8 @@
 // ServerExact v2 for exact/evm scheme
 // Implements server-side payment flow with EIP-3009 settlement
+// Supports Multi-Network via providerUrlMap and privateKeyMap
 
-import { createPublicClient, createWalletClient, http, parseAbi, encodeFunctionData, formatUnits } from 'viem'
+import { createPublicClient, createWalletClient, http, parseAbi, encodeFunctionData, formatUnits, recoverTypedDataAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 import { PaymentRequired } from '../../types/PaymentRequired.mjs'
@@ -31,23 +32,41 @@ class NonceStore {
 
 class ServerExact {
     #nonceStore
-    #provider
-    #walletClient
-    #providerUrl
+    #providerMap
+    #walletClientMap
+    #signerMap
     #abi
-    #facilitatorSigner
     #silent
 
 
     constructor( { nonceStore = null, silent = false } = {} ) {
         this.#nonceStore = nonceStore || new NonceStore()
         this.#silent = silent
+        this.#providerMap = new Map()
+        this.#walletClientMap = new Map()
+        this.#signerMap = new Map()
     }
 
 
-    init( { providerUrl } ) {
-        this.#providerUrl = providerUrl
-        this.#provider = createPublicClient( { transport: http( this.#providerUrl ) } )
+    init( { providerUrl = null, providerUrlMap = null } ) {
+        // Support both single providerUrl (backward compat) and providerUrlMap (multi-network)
+        if( providerUrlMap !== null ) {
+            Object.entries( providerUrlMap )
+                .forEach( ( [ networkId, url ] ) => {
+                    const provider = createPublicClient( { transport: http( url ) } )
+                    this.#providerMap.set( networkId, { provider, url } )
+                } )
+
+            this.#log( `✅ ServerExact v2 initialized with ${this.#providerMap.size} network(s)` )
+        } else if( providerUrl !== null ) {
+            // Backward compatibility: single provider stored as 'default'
+            const provider = createPublicClient( { transport: http( providerUrl ) } )
+            this.#providerMap.set( 'default', { provider, url: providerUrl } )
+
+            this.#log( '✅ ServerExact v2 initialized (single-network mode)' )
+        } else {
+            throw new Error( 'Either providerUrl or providerUrlMap is required' )
+        }
 
         this.#abi = parseAbi( [
             'function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)',
@@ -57,32 +76,103 @@ class ServerExact {
             'function decimals() view returns (uint8)'
         ] )
 
-        this.#log( '✅ ServerExact v2 initialized' )
+        return this
+    }
+
+
+    async setWallet( { privateKey = null, privateKeyMap = null, minEth = '0.01' } ) {
+        // Support both single privateKey (backward compat) and privateKeyMap (multi-network)
+        if( privateKeyMap !== null ) {
+            const networkIds = Object.keys( privateKeyMap )
+
+            for( const networkId of networkIds ) {
+                const key = privateKeyMap[ networkId ]
+                const cleanHex = key.startsWith( '0x' ) ? key : `0x${key}`
+                const signer = privateKeyToAccount( cleanHex )
+
+                const providerEntry = this.#providerMap.get( networkId )
+                if( !providerEntry ) {
+                    throw new Error( `No provider configured for network "${networkId}"` )
+                }
+
+                const walletClient = createWalletClient( {
+                    account: signer,
+                    transport: http( providerEntry.url )
+                } )
+
+                this.#signerMap.set( networkId, signer )
+                this.#walletClientMap.set( networkId, walletClient )
+
+                const balanceRaw = await providerEntry.provider.getBalance( { address: signer.address } )
+                const balance = Number( formatUnits( balanceRaw, 18 ) )
+
+                this.#log( `✅ Wallet set for ${networkId}: ${signer.address} (${balance} ETH)` )
+
+                if( balance < parseFloat( minEth ) ) {
+                    console.warn( `⚠ Facilitator ETH balance below minimum on ${networkId}` )
+                }
+            }
+        } else if( privateKey !== null ) {
+            // Backward compatibility: single wallet stored as 'default'
+            const cleanHex = privateKey.startsWith( '0x' ) ? privateKey : `0x${privateKey}`
+            const signer = privateKeyToAccount( cleanHex )
+
+            const providerEntry = this.#providerMap.get( 'default' )
+            if( !providerEntry ) {
+                throw new Error( 'No provider configured. Call init() first.' )
+            }
+
+            const walletClient = createWalletClient( {
+                account: signer,
+                transport: http( providerEntry.url )
+            } )
+
+            this.#signerMap.set( 'default', signer )
+            this.#walletClientMap.set( 'default', walletClient )
+
+            const balanceRaw = await providerEntry.provider.getBalance( { address: signer.address } )
+            const balance = Number( formatUnits( balanceRaw, 18 ) )
+
+            this.#log( `✅ Facilitator wallet set: ${signer.address} (${balance} ETH)` )
+
+            if( balance < parseFloat( minEth ) ) {
+                console.warn( '⚠ Facilitator ETH balance below minimum threshold' )
+            }
+        } else {
+            throw new Error( 'Either privateKey or privateKeyMap is required' )
+        }
 
         return this
     }
 
 
-    async setWallet( { privateKey, minEth = '0.01' } ) {
-        const cleanHex = privateKey.startsWith( '0x' ) ? privateKey : `0x${privateKey}`
-        this.#facilitatorSigner = privateKeyToAccount( cleanHex )
-        const accountAddress = this.#facilitatorSigner.address
-
-        this.#walletClient = createWalletClient( {
-            account: this.#facilitatorSigner,
-            transport: http( this.#providerUrl )
-        } )
-
-        const balanceRaw = await this.#provider.getBalance( { address: accountAddress } )
-        const balance = Number( formatUnits( balanceRaw, 18 ) )
-
-        this.#log( `✅ Facilitator wallet set: ${accountAddress} (${balance} ETH)` )
-
-        if( balance < parseFloat( minEth ) ) {
-            console.warn( '⚠ Facilitator ETH balance below minimum threshold' )
+    #getProviderForNetwork( { network } ) {
+        // First try exact match
+        if( this.#providerMap.has( network ) ) {
+            return this.#providerMap.get( network )
         }
 
-        return this
+        // Fall back to 'default' for single-network mode
+        if( this.#providerMap.has( 'default' ) ) {
+            return this.#providerMap.get( 'default' )
+        }
+
+        return null
+    }
+
+
+    #getWalletClientForNetwork( { network } ) {
+        // First try exact match
+        if( this.#walletClientMap.has( network ) ) {
+            return this.#walletClientMap.get( network )
+        }
+
+        // Fall back to 'default' for single-network mode
+        if( this.#walletClientMap.has( 'default' ) ) {
+            return this.#walletClientMap.get( 'default' )
+        }
+
+        return null
     }
 
 
@@ -177,7 +267,7 @@ class ServerExact {
     }
 
 
-    validatePaymentSignatureRequestPayload( { decodedPaymentSignatureRequestPayloadToValidate, paymentRequiredResponsePayload } ) {
+    async validatePaymentSignatureRequestPayload( { decodedPaymentSignatureRequestPayloadToValidate, paymentRequiredResponsePayload } ) {
         const validationIssueList = []
 
         // Validate payload shape
@@ -195,7 +285,7 @@ class ServerExact {
         }
 
         const { accepted, payload, resource } = decodedPaymentSignatureRequestPayloadToValidate
-        const { authorization } = payload
+        const { authorization, signature } = payload
         const { resource: expectedResource, accepts } = paymentRequiredResponsePayload
 
         // Validate resource matches
@@ -232,6 +322,24 @@ class ServerExact {
             }
         }
 
+        // Check if we have a provider for this network
+        const providerEntry = this.#getProviderForNetwork( { network: accepted.network } )
+        if( !providerEntry ) {
+            validationIssueList.push( {
+                issuePath: 'accepted.network',
+                issueCode: ErrorCodes.INVALID_NETWORK,
+                issueMessage: `No provider configured for network "${accepted.network}"`
+            } )
+
+            return {
+                paymentSignatureRequestPayloadValidationOutcome: {
+                    validationOk: false,
+                    validationIssueList,
+                    matchedPaymentRequirementsFromClientPayload: null
+                }
+            }
+        }
+
         // Validate amount is sufficient
         const authorizationValue = BigInt( authorization.value )
         const requiredAmount = BigInt( matchedRequirement.amount )
@@ -239,7 +347,7 @@ class ServerExact {
         if( authorizationValue < requiredAmount ) {
             validationIssueList.push( {
                 issuePath: 'payload.authorization.value',
-                issueCode: ErrorCodes.INVALID_PAYLOAD,
+                issueCode: ErrorCodes.INVALID_EXACT_EVM_PAYLOAD_VALUE,
                 issueMessage: `Insufficient payment amount: required ${requiredAmount}, got ${authorizationValue}`
             } )
         }
@@ -284,6 +392,22 @@ class ServerExact {
             } )
         }
 
+        // EIP-3009 Signature Verification
+        const signatureVerificationResult = await this.#verifyEip3009Signature( {
+            authorization,
+            signature,
+            accepted,
+            matchedRequirement
+        } )
+
+        if( !signatureVerificationResult.valid ) {
+            validationIssueList.push( {
+                issuePath: 'payload.signature',
+                issueCode: ErrorCodes.INVALID_EXACT_EVM_PAYLOAD_SIGNATURE,
+                issueMessage: signatureVerificationResult.error
+            } )
+        }
+
         const validationOk = validationIssueList.length === 0
 
         if( validationOk ) {
@@ -300,10 +424,88 @@ class ServerExact {
     }
 
 
+    async #verifyEip3009Signature( { authorization, signature, accepted, matchedRequirement } ) {
+        try {
+            // Parse chainId from network
+            const { parsedChainIdNumber, parseError } = EvmNetworkParsing
+                .parseEip155NetworkId( { paymentNetworkIdToParse: accepted.network } )
+
+            if( parseError ) {
+                return { valid: false, error: `Failed to parse network: ${parseError}` }
+            }
+
+            // Get domain info from matchedRequirement.extra
+            const { name: domainName, version: domainVersion } = matchedRequirement.extra || {}
+
+            if( !domainName || !domainVersion ) {
+                return { valid: false, error: 'Missing domain info (name/version) in payment requirement' }
+            }
+
+            const domain = {
+                name: domainName,
+                version: domainVersion,
+                chainId: parsedChainIdNumber,
+                verifyingContract: accepted.asset
+            }
+
+            const types = {
+                TransferWithAuthorization: [
+                    { name: 'from', type: 'address' },
+                    { name: 'to', type: 'address' },
+                    { name: 'value', type: 'uint256' },
+                    { name: 'validAfter', type: 'uint256' },
+                    { name: 'validBefore', type: 'uint256' },
+                    { name: 'nonce', type: 'bytes32' }
+                ]
+            }
+
+            const message = {
+                from: authorization.from,
+                to: authorization.to,
+                value: BigInt( authorization.value ),
+                validAfter: BigInt( authorization.validAfter ),
+                validBefore: BigInt( authorization.validBefore ),
+                nonce: authorization.nonce
+            }
+
+            const recoveredAddress = await recoverTypedDataAddress( {
+                domain,
+                types,
+                primaryType: 'TransferWithAuthorization',
+                message,
+                signature
+            } )
+
+            if( recoveredAddress.toLowerCase() !== authorization.from.toLowerCase() ) {
+                return {
+                    valid: false,
+                    error: `Signature recovery mismatch: expected ${authorization.from}, recovered ${recoveredAddress}`
+                }
+            }
+
+            return { valid: true }
+        } catch( e ) {
+            return { valid: false, error: `Signature verification failed: ${e.message}` }
+        }
+    }
+
+
     async simulateTransaction( { decodedPaymentSignatureRequestPayload, matchedPaymentRequirementsFromClientPayload } ) {
         const { payload, accepted } = decodedPaymentSignatureRequestPayload
         const { authorization, signature } = payload
         const tokenAddress = accepted.asset
+
+        // Get provider for this network
+        const providerEntry = this.#getProviderForNetwork( { network: accepted.network } )
+        if( !providerEntry ) {
+            return {
+                paymentSimulationOutcome: {
+                    simulationOk: false,
+                    simulationError: `No provider configured for network "${accepted.network}"`,
+                    errorCode: ErrorCodes.INVALID_NETWORK
+                }
+            }
+        }
 
         const { from, to, nonce } = authorization
         const value = BigInt( authorization.value )
@@ -319,7 +521,7 @@ class ServerExact {
         } )
 
         try {
-            await this.#provider.call( { to: tokenAddress, data } )
+            await providerEntry.provider.call( { to: tokenAddress, data } )
             this.#log( '✅ Simulation successful' )
 
             return { paymentSimulationOutcome: { simulationOk: true } }
@@ -342,6 +544,22 @@ class ServerExact {
         const { authorization, signature } = payload
         const tokenAddress = accepted.asset
 
+        // Get wallet client for this network
+        const walletClient = this.#getWalletClientForNetwork( { network: accepted.network } )
+        if( !walletClient ) {
+            const { settlementResponse } = SettlementResponse
+                .createFailureSettlementResponse( { errorReason: `No wallet configured for network "${accepted.network}"` } )
+
+            return {
+                paymentSettlementOutcome: {
+                    settlementOk: false,
+                    settlementError: `No wallet configured for network "${accepted.network}"`,
+                    errorCode: ErrorCodes.INVALID_NETWORK,
+                    settlementResponse
+                }
+            }
+        }
+
         const { from, to, nonce } = authorization
         const value = BigInt( authorization.value )
         const validAfter = BigInt( authorization.validAfter )
@@ -356,7 +574,7 @@ class ServerExact {
         } )
 
         try {
-            const hash = await this.#walletClient.sendTransaction( {
+            const hash = await walletClient.sendTransaction( {
                 to: tokenAddress,
                 data
             } )

@@ -135,7 +135,7 @@ await server
 const { decodedPaymentSignatureRequestPayload } = server
     .decodePaymentSignatureHeader( { paymentSignatureHeaderValueToDecode: paymentSignatureHeaderValue } )
 
-const { paymentSignatureRequestPayloadValidationOutcome } = server
+const { paymentSignatureRequestPayloadValidationOutcome } = await server
     .validatePaymentSignatureRequestPayload( { decodedPaymentSignatureRequestPayloadToValidate: decodedPaymentSignatureRequestPayload, paymentRequiredResponsePayload } )
 if( !paymentSignatureRequestPayloadValidationOutcome.validationOk ) {
     console.error( 'Payment validation failed:', paymentSignatureRequestPayloadValidationOutcome.validationIssueList )
