@@ -1,2 +1,22 @@
 old
 node_modules
+
+# Environment & Secrets
+.env
+.env.*
+*.env
+secrets/
+credentials/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
