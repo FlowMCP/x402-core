@@ -1,5 +1,5 @@
-import {  ClientExact,  ServerExact,  NonceStore  } from './../src/index.mjs'
-import { EnvironmentManager } from './../tests/helpers/EnvironmentManager.mjs'
+import { ClientExact, ServerExact, NonceStore } from './../src/legacy/index.mjs'
+import { EnvironmentManager } from './../tests/v1/helpers/EnvironmentManager.mjs'
 
 
 const cfg = {

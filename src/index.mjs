@@ -1,6 +1,3 @@
-import { ClientExact } from './task/ClientExact.mjs'
-import { ServerExact } from './task/ServerExact.mjs'
-import { NonceStore } from './helpers/NonceStore.mjs'
-
-
-export { ClientExact, ServerExact, NonceStore }
+export * as v1 from './v1/index.mjs'
+export * as v2 from './v2/index.mjs'
+export * as legacy from './legacy/index.mjs'
