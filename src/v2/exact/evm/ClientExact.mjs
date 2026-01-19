@@ -1,7 +1,7 @@
 // ClientExact v2 for exact/evm scheme
 // Implements client-side payment flow with EIP-3009 authorization
 
-import { createPublicClient, http, parseUnits, parseAbi, getContract, formatUnits } from 'viem'
+import { createPublicClient, http, parseAbi } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { randomBytes } from 'crypto'
 
@@ -67,13 +67,11 @@ class ClientExact {
 
 
     static selectMatchingPaymentOption( { paymentRequiredResponsePayload, clientAllowedAssetConstraintList, clientSupportedPaymentNetworkIdList, paymentOptionSelectionPolicy = null } ) {
-        const diagnostics = {
-            totalServerOptions: 0,
-            filteredByScheme: 0,
-            filteredByNetwork: 0,
-            filteredByAsset: 0,
-            candidatesAfterFilter: 0
-        }
+        let totalServerOptions = 0
+        let filteredByScheme = 0
+        let filteredByNetwork = 0
+        let filteredByAsset = 0
+        let candidatesAfterFilter = 0
 
         const { accepts } = paymentRequiredResponsePayload
 
@@ -81,19 +79,23 @@ class ClientExact {
             return {
                 selectedPaymentRequirements: null,
                 paymentOptionSelectionDiagnostics: {
-                    ...diagnostics,
+                    totalServerOptions,
+                    filteredByScheme,
+                    filteredByNetwork,
+                    filteredByAsset,
+                    candidatesAfterFilter,
                     error: 'accepts is missing or not an array'
                 }
             }
         }
 
-        diagnostics.totalServerOptions = accepts.length
+        totalServerOptions = accepts.length
 
         // Filter by scheme (exact only)
         const exactOptions = accepts
             .filter( ( option ) => option.scheme === 'exact' )
 
-        diagnostics.filteredByScheme = accepts.length - exactOptions.length
+        filteredByScheme = accepts.length - exactOptions.length
 
         // Filter by supported network
         const networkFilteredOptions = exactOptions
@@ -105,7 +107,7 @@ class ClientExact {
                 return clientSupportedPaymentNetworkIdList.includes( option.network )
             } )
 
-        diagnostics.filteredByNetwork = exactOptions.length - networkFilteredOptions.length
+        filteredByNetwork = exactOptions.length - networkFilteredOptions.length
 
         // Filter by allowed asset constraints
         const assetFilteredOptions = networkFilteredOptions
@@ -135,14 +137,18 @@ class ClientExact {
                 return assetMatch !== undefined
             } )
 
-        diagnostics.filteredByAsset = networkFilteredOptions.length - assetFilteredOptions.length
-        diagnostics.candidatesAfterFilter = assetFilteredOptions.length
+        filteredByAsset = networkFilteredOptions.length - assetFilteredOptions.length
+        candidatesAfterFilter = assetFilteredOptions.length
 
         if( assetFilteredOptions.length === 0 ) {
             return {
                 selectedPaymentRequirements: null,
                 paymentOptionSelectionDiagnostics: {
-                    ...diagnostics,
+                    totalServerOptions,
+                    filteredByScheme,
+                    filteredByNetwork,
+                    filteredByAsset,
+                    candidatesAfterFilter,
                     errorCode: ErrorCodes.NO_MATCHING_PAYMENT_OPTION,
                     error: 'No matching payment option found after filtering'
                 }
@@ -156,7 +162,11 @@ class ClientExact {
         return {
             selectedPaymentRequirements: selectedOption,
             paymentOptionSelectionDiagnostics: {
-                ...diagnostics,
+                totalServerOptions,
+                filteredByScheme,
+                filteredByNetwork,
+                filteredByAsset,
+                candidatesAfterFilter,
                 selectionReason
             }
         }

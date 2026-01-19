@@ -4,7 +4,7 @@ import { ErrorCodes } from '../errors/errorCodes.mjs'
 
 
 class ConfigValidator {
-    static validateX402V2ExactEvmConfiguration( { contractCatalog, paymentOptionCatalog, restrictedCalls = [] } ) {
+    static validateX402V2ExactEvmConfiguration( { contractCatalog, paymentOptionCatalog, serverPayToAddressMap = {}, restrictedCalls = [] } ) {
         const configurationValidationIssueList = []
 
         // Validate contractCatalog
@@ -22,7 +22,19 @@ class ConfigValidator {
             } )
         } else {
             const contractIssues = ConfigValidator.#validateContractCatalog( { contractCatalog } )
-            configurationValidationIssueList.push( ...contractIssues )
+            contractIssues
+                .forEach( ( issue ) => {
+                    configurationValidationIssueList.push( issue )
+                } )
+        }
+
+        // Validate serverPayToAddressMap
+        if( serverPayToAddressMap !== undefined && ( typeof serverPayToAddressMap !== 'object' || Array.isArray( serverPayToAddressMap ) ) ) {
+            configurationValidationIssueList.push( {
+                issuePath: 'serverPayToAddressMap',
+                issueCode: ErrorCodes.INVALID_CONFIGURATION,
+                issueMessage: 'serverPayToAddressMap must be an object'
+            } )
         }
 
         // Validate paymentOptionCatalog
@@ -39,8 +51,11 @@ class ConfigValidator {
                 issueMessage: 'paymentOptionCatalog must be an object'
             } )
         } else if( contractCatalog && typeof contractCatalog === 'object' ) {
-            const optionIssues = ConfigValidator.#validatePaymentOptionCatalog( { paymentOptionCatalog, contractCatalog } )
-            configurationValidationIssueList.push( ...optionIssues )
+            const optionIssues = ConfigValidator.#validatePaymentOptionCatalog( { paymentOptionCatalog, contractCatalog, serverPayToAddressMap } )
+            optionIssues
+                .forEach( ( issue ) => {
+                    configurationValidationIssueList.push( issue )
+                } )
         }
 
         // Validate restrictedCalls
@@ -52,7 +67,10 @@ class ConfigValidator {
             } )
         } else if( Array.isArray( restrictedCalls ) && paymentOptionCatalog ) {
             const callIssues = ConfigValidator.#validateRestrictedCalls( { restrictedCalls, paymentOptionCatalog } )
-            configurationValidationIssueList.push( ...callIssues )
+            callIssues
+                .forEach( ( issue ) => {
+                    configurationValidationIssueList.push( issue )
+                } )
         }
 
         const configurationValidationOk = configurationValidationIssueList.length === 0
@@ -122,7 +140,7 @@ class ConfigValidator {
     }
 
 
-    static #validatePaymentOptionCatalog( { paymentOptionCatalog, contractCatalog } ) {
+    static #validatePaymentOptionCatalog( { paymentOptionCatalog, contractCatalog, serverPayToAddressMap } ) {
         const issues = []
 
         Object.entries( paymentOptionCatalog )
@@ -154,6 +172,20 @@ class ConfigValidator {
                             } )
                         }
                     } )
+
+                // Validate payTo alias can be resolved
+                if( option.payTo && typeof option.payTo === 'string' ) {
+                    if( option.payTo.startsWith( '{{' ) && option.payTo.endsWith( '}}' ) ) {
+                        const aliasKey = option.payTo.slice( 2, -2 )
+                        if( !serverPayToAddressMap || !serverPayToAddressMap[ aliasKey ] ) {
+                            issues.push( {
+                                issuePath: `${basePath}.payTo`,
+                                issueCode: ErrorCodes.INVALID_CONFIGURATION,
+                                issueMessage: `payTo alias "{{${aliasKey}}}" not found in serverPayToAddressMap`
+                            } )
+                        }
+                    }
+                }
 
                 // Validate contractId references existing contract
                 if( option.contractId && !contractCatalog[ option.contractId ] ) {

@@ -113,10 +113,12 @@ class ServerExact {
                 const derivedPaymentNetworkId = contract.paymentNetworkId
 
                 preparedPaymentOptionCatalog[ optionId ] = {
-                    ...option,
+                    contractId,
+                    amount,
                     payTo: resolvedPayTo,
                     maxTimeoutSeconds: maxTimeoutSeconds || serverDefaultMaxTimeoutSeconds,
-                    derivedPaymentNetworkId
+                    derivedPaymentNetworkId,
+                    assetTransferMethod: option.assetTransferMethod || null
                 }
             } )
 
@@ -186,16 +188,26 @@ class ServerExact {
             return {
                 paymentSignatureRequestPayloadValidationOutcome: {
                     validationOk: false,
-                    validationIssueList: shapeIssues
+                    validationIssueList: shapeIssues,
+                    matchedPaymentRequirementsFromClientPayload: null
                 }
             }
         }
 
         const { accepted, payload, resource } = decodedPaymentSignatureRequestPayloadToValidate
         const { authorization } = payload
+        const { resource: expectedResource, accepts } = paymentRequiredResponsePayload
+
+        // Validate resource matches
+        if( resource !== expectedResource ) {
+            validationIssueList.push( {
+                issuePath: 'resource',
+                issueCode: ErrorCodes.INVALID_PAYLOAD,
+                issueMessage: `Resource mismatch: expected "${expectedResource}", got "${resource}"`
+            } )
+        }
 
         // Match accepted against server's accepts
-        const { accepts } = paymentRequiredResponsePayload
         const matchedRequirement = accepts
             .find( ( req ) =>
                 req.scheme === accepted.scheme &&
@@ -220,6 +232,18 @@ class ServerExact {
             }
         }
 
+        // Validate amount is sufficient
+        const authorizationValue = BigInt( authorization.value )
+        const requiredAmount = BigInt( matchedRequirement.amount )
+
+        if( authorizationValue < requiredAmount ) {
+            validationIssueList.push( {
+                issuePath: 'payload.authorization.value',
+                issueCode: ErrorCodes.INVALID_PAYLOAD,
+                issueMessage: `Insufficient payment amount: required ${requiredAmount}, got ${authorizationValue}`
+            } )
+        }
+
         // Validate time window
         const now = BigInt( Math.floor( Date.now() / 1000 ) )
         const validAfter = BigInt( authorization.validAfter )
@@ -241,7 +265,7 @@ class ServerExact {
             } )
         }
 
-        // Check nonce reuse
+        // Check nonce reuse (but don't mark yet - only after successful settlement)
         const nonceKey = `${authorization.from.toLowerCase()}-${authorization.nonce.toLowerCase()}`
         if( this.#nonceStore.isUsed( { nonceKey } ) ) {
             validationIssueList.push( {
@@ -263,7 +287,6 @@ class ServerExact {
         const validationOk = validationIssueList.length === 0
 
         if( validationOk ) {
-            this.#nonceStore.markUsed( { nonceKey } )
             this.#log( '✅ Payment signature validated successfully' )
         }
 
@@ -337,6 +360,10 @@ class ServerExact {
                 to: tokenAddress,
                 data
             } )
+
+            // Mark nonce as used AFTER successful settlement
+            const nonceKey = `${from.toLowerCase()}-${nonce.toLowerCase()}`
+            this.#nonceStore.markUsed( { nonceKey } )
 
             this.#log( `✅ Settlement broadcasted: ${hash}` )
 
